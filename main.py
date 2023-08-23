@@ -1,11 +1,23 @@
 from fastapi import FastAPI,File, UploadFile
 from fastapi.responses import JSONResponse
+from fastapi.middleware.cors import CORSMiddleware
 from typing import Union
 import pandas as pd
 import numpy as np
 from io import BytesIO
 
 app = FastAPI()
+# Configure CORS settings
+origins = [
+    "http://localhost:3000",  # Adjust this to the actual URL of your React app
+]
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=origins,
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 @app.get('/')
 async def root():
     return {"message": "hello world"}
