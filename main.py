@@ -1,12 +1,21 @@
 from fastapi import FastAPI,File, UploadFile
 from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
+from gensim import corpora
+from pydantic import BaseModel
+from typing import List
+from gensim.models.ldamodel import LdaModel
 from typing import Union
 import pandas as pd
 import numpy as np
 from io import BytesIO
+import re
+import nltk
 
 app = FastAPI()
+
+class TextItems(BaseModel):
+    texts: List[str]
 # Configure CORS settings
 origins = [
     "http://localhost:3000",  # Adjust this to the actual URL of your React app
@@ -18,6 +27,7 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+nltk.download('stopwords')
 @app.get('/')
 async def root():
     return {"message": "hello world"}
@@ -46,14 +56,14 @@ def remove_null(df):
     #drop columns
     return df.drop(columns = null_percentage[null_percentage==100].index)
 
-def classify_columns(df, cat_threshold=25):
+def classify_columns(df, cat_threshold=35):
     """
     Classify columns of a DataFrame as 'categorical', 'open_ended', or 'date'.
     
     Parameters:
     df (DataFrame): The DataFrame to classify
     cat_threshold (int): The number of unique values below which a column is considered 'categorical'.
-                         Default is 10.
+                         Default is 35.
                          
     Returns:
     dict: A dictionary where keys are column names and values are column types
@@ -89,6 +99,50 @@ def get_vals(df):
     for col in col_names:
         if cats[col]=='categorical':
             dict[col]=df[col].value_counts().to_dict()
+        elif cats[col] == 'open_ended':
+            #temp_lstText =  get_text(df[col])
+            #dict[col] = get_topics(temp_lstText)
+            dict[col] = get_text(df[col])
     return dict
 
+from nltk.corpus import stopwords
+def clean_text(text):
+    # Convert to lowercase
+    text = text.lower()
+    
+    # Remove all non a-z0-9 characters using regex
+    text = re.sub(r'[^a-z0-9\s]', '', text)
+    
+    # Remove stop words
+    stop_words = set(stopwords.words('english'))
+    words = text.split()
+    cleaned_words = [word for word in words if word not in stop_words]
+    
+    # Join the cleaned words back into a string
+    cleaned_text = ' '.join(cleaned_words)
+    return cleaned_text
 
+def get_text(series):
+    series = series.dropna()
+    series = series.apply(lambda x: clean_text(x))
+    return series.tolist()
+
+@app.post("/get_topics/")
+def get_topics(texts, num_topics = 5):
+    # Create a dictionary representation of the documents
+    tokenized_texts = [text.split() for text in texts if text]
+    dictionary = corpora.Dictionary(tokenized_texts)
+
+    # Convert the list of texts to a list of vectors based on word frequency
+    corpus = [dictionary.doc2bow(text) for text in tokenized_texts]
+    lda_model = LdaModel(corpus, num_topics=num_topics, id2word=dictionary, passes=15)
+    topics = lda_model.print_topics(num_words=5)  # Adjust num_words to display more or fewer keywords per topic
+    topics_as_word_lists = []
+    num_words_per_topic =5
+    for topic_id in range(lda_model.num_topics):
+        topic_word_ids = [word_id for word_id, prob in lda_model.get_topic_terms(topic_id, num_words_per_topic)]
+        topic_words = [dictionary[word_id] for word_id in topic_word_ids]
+        topics_as_word_lists.append(topic_words)
+
+    #return topics_as_word_lists
+    return topics_as_word_lists
