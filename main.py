@@ -11,6 +11,7 @@ import numpy as np
 from io import BytesIO
 import re
 import nltk
+from collections import Counter
 
 app = FastAPI()
 
@@ -146,3 +147,14 @@ def get_topics(texts, num_topics = 5):
 
     #return topics_as_word_lists
     return topics_as_word_lists
+
+@app.post("/get_frequent/")
+def get_frequent(texts, num_words=10):
+    # Flatten the list of lists into a single list of words
+    all_words = [word for text in texts for word in text.split()]
+
+    # Use Counter to get word frequencies
+    word_counts = Counter(all_words)
+
+    # Return the top 'num_words' frequent words
+    return dict(word_counts.most_common(num_words))
