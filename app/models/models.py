@@ -29,3 +29,13 @@ class Question(Base):
     added_at = Column(String)
     updated_at = Column(String)
     survey_id = Column(Integer)
+
+class Answer(Base):
+    __tablename__ = "VisualizationApp_surveyquestionnaireresponse"
+    id = Column(Integer, primary_key =True)
+    answer = Column(String)
+    type = Column(String)
+    file = Column(String)
+    added_at = Column(String)
+    question_id = Column(Integer)
+    survey_response_id = Column(Integer)
