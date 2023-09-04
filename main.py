@@ -1,4 +1,4 @@
-from fastapi import FastAPI,File, UploadFile
+from fastapi import FastAPI,File, UploadFile, Depends, HTTPException
 from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 from gensim import corpora
@@ -12,8 +12,17 @@ from io import BytesIO
 import re
 import nltk
 from collections import Counter
-
+from sqlalchemy.orm import Session
+import db, models  # Import database-related code and models
 app = FastAPI()
+
+# Dependency to get the database session
+def get_db():
+    db_session = db.SessionLocal()
+    try:
+        yield db_session
+    finally:
+        db_session.close()
 
 class TextItems(BaseModel):
     texts: List[str]
@@ -158,3 +167,20 @@ def get_frequent(texts, num_words=10):
 
     # Return the top 'num_words' frequent words
     return dict(word_counts.most_common(num_words))
+
+@app.get("/survey/")
+def get_surveys(db: Session = Depends(get_db)):
+    item = db.query(models.Survey).all()
+    if item is None:
+        raise HTTPException(status_code=404, detail="Item not found")
+    return item
+
+@app.get("/questionnares/{survey_id}")
+def get_questions(survey_id: int, db:Session = Depends(get_db)):
+    try:
+        items = db.query(models.Question).filter(models.Question.survey_id == survey_id).all()
+        if items is None:
+            raise HTTPException(status_code = 404, detail = "Item not found")
+        return items
+    except Exception as error:
+         raise HTTPException(status_code=500, detail="Internal server error")
