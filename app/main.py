@@ -1,5 +1,4 @@
-from fastapi import FastAPI,File, UploadFile, Depends, HTTPException
-from fastapi.responses import JSONResponse
+from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 import nltk
 import app.router.nlp_router as nlp_router

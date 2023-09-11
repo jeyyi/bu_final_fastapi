@@ -1,10 +1,14 @@
-from fastapi import APIRouter
+from fastapi import APIRouter, HTTPException
+from wordcloud import WordCloud
 from nltk.corpus import stopwords
 from typing import List
+import io
 from gensim import corpora
+import matplotlib.pyplot as plt
 from gensim.models.ldamodel import LdaModel
 from collections import Counter
 import re
+from starlette.responses import StreamingResponse
 router_nlp = APIRouter()
 
 def clean_text(text):
@@ -52,6 +56,7 @@ def get_topics(texts: List[str], num_topics = 5):
 @router_nlp.post("/get_frequent/")
 def get_frequent(texts: List[str], num_words: int):
     # Flatten the list of lists into a single list of words
+    texts = [clean_text(text) for text in texts]
     all_words = [word for text in texts for word in text.split()]
     #all_words = [word for word in texts.split()]
     # Use Counter to get word frequencies
@@ -59,4 +64,25 @@ def get_frequent(texts: List[str], num_words: int):
 
     # Return the top 'num_words' frequent words
     return dict(word_counts.most_common(num_words))
+
+@router_nlp.post("/generate_wordcloud")
+def generate_wordcloud(texts: List[str]):
+    # Set the Agg backend for matplotlib
+    texts = [clean_text(text) for text in texts]
+    text = " ".join(texts)
+    #create wordcloud objects
+    wordcloud = WordCloud(width = 800, height = 400, background_color="white").generate(text)
+    #create an in-memory buffer to store the image
+    img_buffer = io.BytesIO()
+    #Save wordcloud image to buffer
+    plt.switch_backend("Agg")
+    plt.figure(figsize=(10,5))
+    plt.imshow(wordcloud, interpolation='bilinear')
+    plt.axis("off")
+    plt.savefig(img_buffer, format = 'png')
+    plt.close()
+    #seek to the beginning of the buffer
+    img_buffer.seek(0)
+
+    return StreamingResponse(io.BytesIO(img_buffer.read()), media_type = "image/png")
 
