@@ -1,5 +1,7 @@
 from sqlalchemy import Column, Integer, String
+from pydantic import BaseModel
 from sqlalchemy.ext.declarative import declarative_base
+from typing import List
 # Create a SQLAlchemy Base class
 Base = declarative_base()
 
@@ -39,3 +41,6 @@ class Answer(Base):
     added_at = Column(String)
     question_id = Column(Integer)
     survey_response_id = Column(Integer)
+
+class TextItems(BaseModel):
+    texts: List[str]
