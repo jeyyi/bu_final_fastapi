@@ -2,18 +2,23 @@ from fastapi import APIRouter, HTTPException
 from wordcloud import WordCloud
 from nltk.corpus import stopwords
 from typing import List
+import itertools
+import collections
+import pandas as pd
 import io
 from gensim import corpora
 import matplotlib.pyplot as plt
 from gensim.models.ldamodel import LdaModel
 from collections import Counter
 import re
+import networkx as nx
+from nltk import bigrams
 from starlette.responses import StreamingResponse
 router_nlp = APIRouter()
 
 def clean_text(text):
     # Convert to lowercase
-    text = text.lower()
+    text = str(text).lower()
     
     # Remove all non a-z0-9 characters using regex
     text = re.sub(r'[^a-z0-9\s]', '', text)
@@ -86,3 +91,62 @@ def generate_wordcloud(texts: List[str]):
 
     return StreamingResponse(io.BytesIO(img_buffer.read()), media_type = "image/png")
 
+@router_nlp.post("/generate_bigramnetwork")
+async def generate_bigram_network(texts: List[str]):
+    from nltk import bigrams
+    texts = [clean_text(text) for text in texts]
+    texts = [text.split() for text in texts]
+    terms_bigrams = [list(bigrams(text)) for text in texts]
+    bigrams = list(itertools.chain(*terms_bigrams))
+    bigrams_counts = collections.Counter(bigrams)
+    bigram_df = pd.DataFrame(bigrams_counts.most_common(20),
+                             columns=['bigram', 'count'])
+    d = bigram_df.set_index('bigram').T.to_dict('records')
+    G = nx.Graph()
+    
+    # Create connections between nodes
+    for k, v in d[0].items():
+        G.add_edge(k[0], k[1], weight=(v * 10))
+    
+    img_buffer = io.BytesIO()
+    fig, ax = plt.subplots(figsize=(15, 10))
+    pos = nx.spring_layout(G, k=2)
+    
+    # Plot networks
+    nx.draw_networkx(
+        G,
+        pos,
+        font_size=16,
+        width=3,
+        edge_color='grey',
+        node_color='purple',
+        with_labels=False,
+        ax=ax
+    )
+    
+    # Create offset labels
+    for key, value in pos.items():
+        x, y = value[0] + .135, value[1] + .045
+        ax.text(
+            x,
+            y,
+            s=key,
+            bbox=dict(facecolor='red', alpha=0.25),
+            horizontalalignment='center',
+            fontsize=13
+        )
+    
+    # Save the plot to the image buffer
+    plt.savefig(img_buffer, format='png')
+    img_buffer.seek(0)
+    
+    # Define a function to generate the image in chunks
+    def generate():
+        yield img_buffer.getvalue()
+    
+    # Return a StreamingResponse
+    return StreamingResponse(
+        generate(),
+        media_type="image/png"
+    )
+    
