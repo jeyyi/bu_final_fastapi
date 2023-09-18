@@ -14,31 +14,42 @@ import re
 import networkx as nx
 from nltk import bigrams
 from starlette.responses import StreamingResponse
-router_nlp = APIRouter()
+from pydantic import BaseModel
+import app.resources.tgstopwords as tgstopwords
 
+class TextsRequest(BaseModel):
+    texts: List[str]
+
+
+router_nlp = APIRouter()
 def clean_text(text):
     # Convert to lowercase
     text = str(text).lower()
-    
+
     # Remove all non a-z0-9 characters using regex
     text = re.sub(r'[^a-z0-9\s]', '', text)
-    
+
     # Remove stop words
-    stop_words = set(stopwords.words('english'))
+    stop_words = (stopwords.words('english'))
+    stop_words.extend(tgstopwords.generate_tgwords())
+    stop_words = set(stop_words)
     words = text.split()
     cleaned_words = [word for word in words if word not in stop_words]
-    
+
     # Join the cleaned words back into a string
     cleaned_text = ' '.join(cleaned_words)
     return cleaned_text
+
 
 def get_text(series):
     series = series.dropna()
     series = series.apply(lambda x: clean_text(x))
     return series.tolist()
 
+
 @router_nlp.post("/get_topics/")
-def get_topics(texts: List[str], num_topics = 5):
+def get_topics(request_data: TextsRequest, num_topics=5):
+    texts = request_data.texts
     # Create a dictionary representation of the documents
     texts = [clean_text(text) for text in texts]
     tokenized_texts = [text.split() for text in texts if text]
@@ -46,54 +57,68 @@ def get_topics(texts: List[str], num_topics = 5):
 
     # Convert the list of texts to a list of vectors based on word frequency
     corpus = [dictionary.doc2bow(text) for text in tokenized_texts]
-    lda_model = LdaModel(corpus, num_topics=num_topics, id2word=dictionary, passes=15)
-    topics = lda_model.print_topics(num_words=5)  # Adjust num_words to display more or fewer keywords per topic
+    lda_model = LdaModel(corpus, num_topics=num_topics,
+                         id2word=dictionary, passes=15)
+    # Adjust num_words to display more or fewer keywords per topic
+    topics = lda_model.print_topics(num_words=5)
     topics_as_word_lists = []
-    num_words_per_topic =5
+    num_words_per_topic = 5
     for topic_id in range(lda_model.num_topics):
-        topic_word_ids = [word_id for word_id, prob in lda_model.get_topic_terms(topic_id, num_words_per_topic)]
+        topic_word_ids = [word_id for word_id, prob in lda_model.get_topic_terms(
+            topic_id, num_words_per_topic)]
         topic_words = [dictionary[word_id] for word_id in topic_word_ids]
         topics_as_word_lists.append(topic_words)
 
-    #return topics_as_word_lists
+    # return topics_as_word_lists
     return topics_as_word_lists
 
+
 @router_nlp.post("/get_frequent/")
-def get_frequent(texts: List[str], num_words: int):
+def get_frequent(request_data : TextsRequest):
+    num_words = 10
+    texts = request_data.texts
     # Flatten the list of lists into a single list of words
     texts = [clean_text(text) for text in texts]
     all_words = [word for text in texts for word in text.split()]
-    #all_words = [word for word in texts.split()]
+    # all_words = [word for word in texts.split()]
     # Use Counter to get word frequencies
     word_counts = Counter(all_words)
 
     # Return the top 'num_words' frequent words
     return dict(word_counts.most_common(num_words))
 
+
 @router_nlp.post("/generate_wordcloud")
-def generate_wordcloud(texts: List[str]):
-    # Set the Agg backend for matplotlib
+def generate_wordcloud(request_data: TextsRequest):
+    texts = request_data.texts
     texts = [clean_text(text) for text in texts]
     text = " ".join(texts)
-    #create wordcloud objects
-    wordcloud = WordCloud(width = 800, height = 400, background_color="white").generate(text)
-    #create an in-memory buffer to store the image
+    
+    # Create wordcloud object
+    wordcloud = WordCloud(width=800, height=400, background_color="white").generate(text)
+    
+    # Create an in-memory buffer to store the image
     img_buffer = io.BytesIO()
-    #Save wordcloud image to buffer
+    
+    # Save wordcloud image to buffer
     plt.switch_backend("Agg")
-    plt.figure(figsize=(10,5))
+    plt.figure(figsize=(10, 5))
     plt.imshow(wordcloud, interpolation='bilinear')
     plt.axis("off")
-    plt.savefig(img_buffer, format = 'png')
+    plt.savefig(img_buffer, format='png')
     plt.close()
-    #seek to the beginning of the buffer
+    
+    # Seek to the beginning of the buffer
     img_buffer.seek(0)
 
-    return StreamingResponse(io.BytesIO(img_buffer.read()), media_type = "image/png")
+    # Return the image as a streaming response
+    return StreamingResponse(io.BytesIO(img_buffer.read()), media_type="image/png")
+
 
 @router_nlp.post("/generate_bigramnetwork")
-async def generate_bigram_network(texts: List[str]):
+async def generate_bigram_network(request_data: TextsRequest):
     from nltk import bigrams
+    texts = request_data.texts
     texts = [clean_text(text) for text in texts]
     texts = [text.split() for text in texts]
     terms_bigrams = [list(bigrams(text)) for text in texts]
@@ -103,15 +128,15 @@ async def generate_bigram_network(texts: List[str]):
                              columns=['bigram', 'count'])
     d = bigram_df.set_index('bigram').T.to_dict('records')
     G = nx.Graph()
-    
+
     # Create connections between nodes
     for k, v in d[0].items():
         G.add_edge(k[0], k[1], weight=(v * 10))
-    
+
     img_buffer = io.BytesIO()
     fig, ax = plt.subplots(figsize=(15, 10))
     pos = nx.spring_layout(G, k=2)
-    
+
     # Plot networks
     nx.draw_networkx(
         G,
@@ -123,7 +148,7 @@ async def generate_bigram_network(texts: List[str]):
         with_labels=False,
         ax=ax
     )
-    
+
     # Create offset labels
     for key, value in pos.items():
         x, y = value[0] + .135, value[1] + .045
@@ -135,18 +160,17 @@ async def generate_bigram_network(texts: List[str]):
             horizontalalignment='center',
             fontsize=13
         )
-    
+
     # Save the plot to the image buffer
     plt.savefig(img_buffer, format='png')
     img_buffer.seek(0)
-    
+
     # Define a function to generate the image in chunks
     def generate():
         yield img_buffer.getvalue()
-    
+
     # Return a StreamingResponse
     return StreamingResponse(
         generate(),
         media_type="image/png"
     )
-    

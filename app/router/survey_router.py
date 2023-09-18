@@ -2,6 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 import app.config.db as db, app.models.models as models
 
+
 router_survey = APIRouter()
 
 # Dependency to get the database session
@@ -20,7 +21,7 @@ def get_surveys(db: Session = Depends(get_db)):
     return item
 
 
-@router_survey.get("/questionnares/{survey_id}")
+@router_survey.get("/questionnaires/{survey_id}")
 def get_questions(survey_id: int, db:Session = Depends(get_db)):
     try:
         items = db.query(models.Question).filter(models.Question.survey_id == survey_id).all()
@@ -45,7 +46,7 @@ def get_responses(question_id: int, db:Session = Depends(get_db)):
     try:
         items = db.query(models.Answer).filter(models.Answer.question_id == question_id).all()
         if items is None:
-            raise HTTPException(status_code = 404, detail = "Item not found")
-        return items
+            raise HTTPException(status_code = 404, detail = "Item not found")     
+        return [item.answer for item in items]
     except Exception as error:
         raise HTTPException(status_code = 500, detail = "Internal server error")
