@@ -1,4 +1,4 @@
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, UploadFile, File
 from wordcloud import WordCloud
 from nltk.corpus import stopwords
 from typing import List
@@ -17,6 +17,8 @@ from starlette.responses import StreamingResponse
 from pydantic import BaseModel
 import app.resources.tgstopwords as tgstopwords
 
+uploaded_stopwords = set()
+
 class TextsRequest(BaseModel):
     texts: List[str]
 
@@ -33,6 +35,8 @@ def clean_text(text):
     stop_words = (stopwords.words('english'))
     stop_words.extend(tgstopwords.generate_tgwords())
     stop_words = set(stop_words)
+    # Add uploaded stopwords
+    stop_words.update(uploaded_stopwords)
     words = text.split()
     cleaned_words = [word for word in words if word not in stop_words]
 
@@ -46,6 +50,18 @@ def get_text(series):
     series = series.apply(lambda x: clean_text(x))
     return series.tolist()
 
+@router_nlp.post("/upload_stopwords")
+async def upload_stopwords(file: UploadFile = File(...)):
+    global uploaded_stopwords
+    content = await file.read()
+    uploaded_stopwords = set(content.decode("utf-8").splitlines())
+    return {"message": "Stopwords uploaded successfully!"}
+
+@router_nlp.post("/reset_stopwords")
+async def reset_stopwords():
+    global uploaded_stopwords
+    uploaded_stopwords = set()
+    return {"message": "stopwords reset"}
 
 @router_nlp.post("/get_topics/")
 def get_topics(request_data: TextsRequest, num_topics=5):
