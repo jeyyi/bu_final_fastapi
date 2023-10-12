@@ -8,6 +8,8 @@ import app.config.db as db, app.models.models as models  # Import database-relat
 
 app = FastAPI()
 nltk.download('stopwords')
+# Download VADER lexicon (if not already downloaded)
+nltk.download('vader_lexicon')
 # Configure CORS settings
 origins = [
     "http://localhost:3000",  # Adjust this to the actual URL of your React app

@@ -15,7 +15,10 @@ import networkx as nx
 from nltk import bigrams
 from starlette.responses import StreamingResponse
 from pydantic import BaseModel
+import nltk
+from nltk.sentiment.vader import SentimentIntensityAnalyzer
 import app.resources.tgstopwords as tgstopwords
+
 
 uploaded_stopwords = set()
 
@@ -43,6 +46,7 @@ def clean_text(text):
     # Join the cleaned words back into a string
     cleaned_text = ' '.join(cleaned_words)
     return cleaned_text
+
 
 
 def get_text(series):
@@ -88,6 +92,20 @@ def get_topics(request_data: TextsRequest, num_topics=5):
     # return topics_as_word_lists
     return topics_as_word_lists
 
+@router_nlp.post("/get_sentiment")
+def get_sentiment(text: str):
+    # Initialize the VADER sentiment analyzer
+    sia = SentimentIntensityAnalyzer()
+    # Get sentiment scores
+    sentiment_scores = sia.polarity_scores(text)
+    # Interpret the sentiment scores
+    compound_score = sentiment_scores['compound']
+    if compound_score >= 0.05:
+        return "Positive"
+    elif compound_score <= -0.05:
+        return  "Negative"
+    else:
+        return "Neutral"
 
 @router_nlp.post("/get_frequent/")
 def get_frequent(request_data : TextsRequest):
@@ -129,6 +147,8 @@ def generate_wordcloud(request_data: TextsRequest):
 
     # Return the image as a streaming response
     return StreamingResponse(io.BytesIO(img_buffer.read()), media_type="image/png")
+
+
 
 
 @router_nlp.post("/generate_bigramnetwork")
