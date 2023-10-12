@@ -93,7 +93,17 @@ def get_topics(request_data: TextsRequest, num_topics=5):
     return topics_as_word_lists
 
 @router_nlp.post("/get_sentiment")
-def get_sentiment(text: str):
+def get_sentiment(request_data: TextsRequest):
+    num_pos = 0
+    num_neg = 0
+    for text in request_data.texts:
+        if get_sentiment_single(text) == "Positive":
+            num_pos = num_pos+1
+        else:
+            num_neg = num_neg+1
+    return {"Positive": num_pos, "Negative": num_neg}
+
+def get_sentiment_single(text: str):
     # Initialize the VADER sentiment analyzer
     sia = SentimentIntensityAnalyzer()
     # Get sentiment scores
