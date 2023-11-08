@@ -5,6 +5,7 @@ import app.router.nlp_router as nlp_router
 import app.router.survey_router as survey_router
 import app.router.csv_router as csv_router
 import app.config.db as db, app.models.models as models  # Import database-related code and models
+import app.router.fnc_router as fnc_router
 
 app = FastAPI()
 nltk.download('stopwords')
@@ -30,3 +31,5 @@ app.include_router(survey_router.router_survey)
 app.include_router(csv_router.router_csv)
 #router for nlp
 app.include_router(nlp_router.router_nlp)
+#router for functions
+app.include_router(fnc_router.router_functions)
