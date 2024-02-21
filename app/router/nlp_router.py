@@ -116,6 +116,27 @@ def get_sentiment_single(text: str):
         return  "Negative"
     else:
         return "Neutral"
+    
+@router_nlp.post("/get_emots")
+def get_emots(request_data:TextsRequest):
+    df = tgstopwords.generate_rulebased()
+    lst_emotions = []
+    texts = " ".join(request_data.texts)
+    texts = texts.lower()
+    for word in texts.split():
+        if word in list(df['Filipino Word']):
+            index = df.index[df['Filipino Word'] == word].tolist()[0]
+            lst_emotions.append(df.columns[df.iloc[index].eq(1)].tolist())
+        if word in list(df['English Word']):
+            index = df.index[df['English Word'] == word].tolist()[0]
+            lst_emotions.append(df.columns[df.iloc[index].eq(1)].tolist())
+    #flatten emotions
+    try:
+        flat_emotions = [item for sublist in lst_emotions for item in sublist]
+        counts = Counter(flat_emotions)
+        return counts
+    except:
+        return []
 
 @router_nlp.post("/get_frequent/")
 def get_frequent(request_data : TextsRequest):
@@ -220,3 +241,4 @@ async def generate_bigram_network(request_data: TextsRequest):
         generate(),
         media_type="image/png"
     )
+
