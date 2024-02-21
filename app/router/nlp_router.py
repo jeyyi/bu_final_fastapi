@@ -1,4 +1,5 @@
 from fastapi import APIRouter, HTTPException, UploadFile, File
+from fastapi.responses import HTMLResponse
 from wordcloud import WordCloud
 from nltk.corpus import stopwords
 from typing import List
@@ -18,6 +19,7 @@ from pydantic import BaseModel
 import nltk
 from nltk.sentiment.vader import SentimentIntensityAnalyzer
 import app.resources.tgstopwords as tgstopwords
+import plotly.graph_objects as go
 
 
 uploaded_stopwords = set()
@@ -242,3 +244,126 @@ async def generate_bigram_network(request_data: TextsRequest):
         media_type="image/png"
     )
 
+@router_nlp.post("/generate_emotiongraph")
+def generate_emotiongraph(request_data: TextsRequest):
+    df = tgstopwords.generate_rulebased()
+    texts = ' '.join(request_data.texts)
+    # Process the text: normalize case, split into words, and count frequency
+    words_in_text = texts.lower().split()
+    word_frequency = Counter(words_in_text)
+
+    # Filter the dataframe to include only words present in the sample text and in the lexicon
+    df_filtered = df[df['Filipino Word'].str.lower().isin(words_in_text)].copy()
+
+    # Calculate sentiment and intensity scores
+    # Correct the references to the column names to match the DataFrame's column names
+    df_filtered['sentiment_score'] = df_filtered['positive'] - df_filtered['negative']
+    df_filtered['intensity_score'] = df_filtered.iloc[:, 1:10].sum(axis=1)
+
+    # Map the frequency from the sample text to the dataframe
+    df_filtered['frequency'] = df_filtered['Filipino Word'].str.lower().map(word_frequency)
+
+    # Aggregate the data by each word to ensure they appear only once
+    df_aggregated = df_filtered.groupby('Filipino Word').agg({
+        'sentiment_score': 'mean',
+        'intensity_score': 'mean',
+        'frequency': 'sum'
+    }).reset_index()
+
+    # Exclude words that are exactly at (0,0)
+    df_aggregated = df_aggregated[~((df_aggregated['sentiment_score'] == 0) & (df_aggregated['intensity_score'] == 0))]
+
+    # Normalize the size of the circles
+    df_aggregated['size'] = df_aggregated['frequency'].apply(lambda x: x**0.5 * 10)
+
+    # Define colors for each quadrant
+    quadrant_colors = {
+        'Pleasant-Intense': 'green',
+        'Unpleasant-Intense': 'red',
+        'Unpleasant-Mild': 'blue',
+        'Pleasant-Mild': 'orange'
+    }
+
+    median_intensity = df_filtered['intensity_score'].median()
+
+    # Function to adjust intensity score for 'mild' words
+    def adjust_intensity_for_mild(intensity, median_intensity):
+        # If intensity is below median, it's considered 'mild' and we make it negative
+        return -intensity if intensity < median_intensity else intensity
+
+    # Apply the function to adjust the intensity scores
+    df_aggregated['adjusted_intensity_score'] = df_aggregated['intensity_score'].apply(
+        adjust_intensity_for_mild, args=(median_intensity,))
+
+    # Function to determine the quadrant with the new logic
+    def determine_quadrant(sentiment, adjusted_intensity):
+        if sentiment > 0 and adjusted_intensity >= 0:
+            return 'Pleasant-Intense'
+        elif sentiment < 0 and adjusted_intensity >= 0:
+            return 'Unpleasant-Intense'
+        elif sentiment < 0 and adjusted_intensity < 0:
+            return 'Unpleasant-Mild'
+        elif sentiment > 0 and adjusted_intensity < 0:
+            return 'Pleasant-Mild'
+
+    # Assign quadrant color and name based on sentiment and adjusted intensity score
+    df_aggregated['quadrant'] = df_aggregated.apply(
+        lambda x: determine_quadrant(x['sentiment_score'], x['adjusted_intensity_score']), axis=1
+    )
+
+    # Map colors to the aggregated data
+    df_aggregated['color'] = df_aggregated['quadrant'].map(quadrant_colors)
+
+    # Create a scatter plot
+    fig = go.Figure()
+
+    # Add the scatter plot for each word
+    # Group data by quadrant
+    for quadrant, color in quadrant_colors.items():
+        quadrant_df = df_aggregated[df_aggregated['quadrant'] == quadrant]
+        fig.add_trace(go.Scatter(
+            x=quadrant_df['sentiment_score'],
+            y=quadrant_df['adjusted_intensity_score'],
+            text=quadrant_df['Filipino Word'],
+            mode='markers+text',
+            marker=dict(
+                size=quadrant_df['size'],
+                color=color,
+                line=dict(width=2, color='DarkSlateGrey'),
+                opacity=0.6
+            ),
+            name=quadrant,
+            textposition='bottom center'
+        ))
+
+
+    # Complete the figure layout settings
+    fig.update_layout(
+        xaxis=dict(showgrid=False, zeroline=True, zerolinewidth=2, zerolinecolor='Black'),
+        yaxis=dict(showgrid=False, zeroline=True, zerolinewidth=2, zerolinecolor='Black'),
+        xaxis_title="Sentiment Score (Unpleasant - Pleasant)",
+        yaxis_title="Intensity Score (Mild - Intense)",
+        legend=dict(
+            title="Quadrants",
+            yanchor="bottom",
+            y=-0.1,
+            xanchor="right",
+            x=1.2
+        ),
+        margin=dict(l=0, r=0, t=0, b=0),
+        paper_bgcolor='rgba(0,0,0,0)',
+        plot_bgcolor='rgba(0,0,0,0)',
+        showlegend=True,
+        width=700,  # Set the same value for width and height
+        height=550,  # to ensure the plot is square in shape
+        autosize=False  # Disable autosize to enforce the specified dimensions
+    )
+
+    # Add quadrant lines that extend across the full plot
+    max_axis_value = max(df_aggregated['sentiment_score'].abs().max(), df_aggregated['intensity_score'].abs().max())
+    fig.add_shape(type="line", x0=0, y0=-max_axis_value, x1=0, y1=max_axis_value,
+                line=dict(color="Black", width=2))
+    fig.add_shape(type="line", x0=-max_axis_value, y0=0, x1=max_axis_value, y1=0,
+                line=dict(color="Black", width=2))
+    fig_html = fig.to_html(full_html=True, include_plotlyjs='cdn')
+    return fig_html
