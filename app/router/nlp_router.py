@@ -20,9 +20,12 @@ import nltk
 from nltk.sentiment.vader import SentimentIntensityAnalyzer
 import app.resources.tgstopwords as tgstopwords
 import plotly.graph_objects as go
+import httpx
 
 
 uploaded_stopwords = set()
+# Set the URL of the EasyNMT service
+EASYNMT_URL = "http://localhost:24080/translate"
 
 class TextsRequest(BaseModel):
     texts: List[str]
@@ -367,3 +370,96 @@ def generate_emotiongraph(request_data: TextsRequest):
                 line=dict(color="Black", width=2))
     fig_html = fig.to_html(full_html=True, include_plotlyjs='cdn')
     return fig_html
+
+@router_nlp.post("/translate_english_to_bikol/")
+async def translate_english_to_bikol(text: str, target_lang: str = 'bcl'):
+    async with httpx.AsyncClient() as client:
+        try:
+            # Make an async call to the EasyNMT REST API
+            response = await client.get(EASYNMT_URL, params={'text': text, 'target_lang': target_lang})
+            # Check for successful response
+            if response.status_code == 200:
+                return response.json()
+            else:
+                raise HTTPException(status_code=response.status_code, detail=response.text)
+        except httpx.RequestError as e:
+            # Handle any network errors
+            raise HTTPException(status_code=500, detail=str(e))
+
+@router_nlp.post("/translate_english_to_ilokano/")
+async def translate_english_to_ilokano(text: str, target_lang: str = 'ilo'):
+    async with httpx.AsyncClient() as client:
+        try:
+            # Make an async call to the EasyNMT REST API
+            response = await client.get(EASYNMT_URL, params={'text': text, 'target_lang': target_lang})
+            # Check for successful response
+            if response.status_code == 200:
+                return response.json()
+            else:
+                raise HTTPException(status_code=response.status_code, detail=response.text)
+        except httpx.RequestError as e:
+            # Handle any network errors
+            raise HTTPException(status_code=500, detail=str(e))
+        
+@router_nlp.post("/translate_english_to_tagalog/")
+async def translate_english_to_tagalog(text: str, target_lang: str = 'tl'):
+    async with httpx.AsyncClient() as client:
+        try:
+            # Make an async call to the EasyNMT REST API
+            response = await client.get(EASYNMT_URL, params={'text': text, 'target_lang': target_lang})
+            # Check for successful response
+            if response.status_code == 200:
+                return response.json()
+            else:
+                raise HTTPException(status_code=response.status_code, detail=response.text)
+        except httpx.RequestError as e:
+            # Handle any network errors
+            raise HTTPException(status_code=500, detail=str(e))
+        
+@router_nlp.post("/translate_bikol_to_eng/")
+async def translate_bikol_to_english(text: str, source_lang: str = 'bcl', target_lang: str = 'en'):
+    async with httpx.AsyncClient() as client:
+        try:
+            # Make an async call to the EasyNMT REST API
+            response = await client.get(EASYNMT_URL, params={'text': text, 'target_lang': target_lang, 'source_lang': source_lang})
+            # Check for successful response
+            if response.status_code == 200:
+                return response.json()
+            else:
+                raise HTTPException(status_code=response.status_code, detail=response.text)
+        except httpx.RequestError as e:
+            # Handle any network errors
+            raise HTTPException(status_code=500, detail=str(e))
+        
+@router_nlp.post("/translate_ilokano_to_english/")
+async def translate_ilokano_to_english(text: str, source_lang: str = 'ilo', target_lang: str = 'en'):
+    async with httpx.AsyncClient() as client:
+        try:
+            # Make an async call to the EasyNMT REST API
+            response = await client.get(EASYNMT_URL, params={'text': text, 'target_lang': target_lang, 'source_lang': source_lang})
+            # Check for successful response
+            if response.status_code == 200:
+                return response.json()
+            else:
+                raise HTTPException(status_code=response.status_code, detail=response.text)
+        except httpx.RequestError as e:
+            # Handle any network errors
+            raise HTTPException(status_code=500, detail=str(e))
+        
+@router_nlp.post("/translate_tagalog_to_english/")
+async def translate_tagalog_to_english(text: str, source_lang: str = 'tl', target_lang: str = 'en'):
+    async with httpx.AsyncClient() as client:
+        try:
+            # Make an async call to the EasyNMT REST API
+            response = await client.get(EASYNMT_URL, params={'text': text, 'target_lang': target_lang, 'source_lang': source_lang})
+            # Check for successful response
+            if response.status_code == 200:
+                return response.json()
+            else:
+                raise HTTPException(status_code=response.status_code, detail=response.text)
+        except httpx.RequestError as e:
+            # Handle any network errors
+            raise HTTPException(status_code=500, detail=str(e))
+        
+        
+
